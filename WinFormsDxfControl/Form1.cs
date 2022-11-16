@@ -17,5 +17,12 @@ namespace WinFormsDxfControl
             InitializeComponent();
         }
 
+        private void buttonUpdate_Click(object sender, EventArgs e)
+        {
+            if (String.IsNullOrEmpty( this.textBox1.Text)==false)
+            {
+                this.winFormsDxfRenderer1.processDXFfileNow(true, this.textBox1.Text, 0, false);
+            }
+        }
     }
 }

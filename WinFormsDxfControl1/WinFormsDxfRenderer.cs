@@ -108,6 +108,10 @@ namespace WinFormsDxfControl1
         /// ALL render-related data
         /// </summary>
         RenderStruct renderStruct;
+        // margins for rendering dxf
+        double offsetLeftRight = 1;
+        double offsetTopBottom = 1;
+
         public WinFormsDxfRenderer()
         {
             InitializeComponent();
@@ -407,12 +411,41 @@ namespace WinFormsDxfControl1
             double rotationAngleRad = ConvertDegreesToRadians(rotationAngleDeg);
             // next... calculate rotation bound box 
             renderStruct.currentRotationBoundBox = getBoundBoxOfDxf(dxfFile, true, rawCenterX, rawCenterY, rotationAngleRad);
+            //calculate appropriate scale. largest dimension of rotated boundbox must fit inside smallest dimension of control
+            double rotBoxWidth = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightX - renderStruct.currentRotationBoundBox.upperLeftX);
+            double rotBoxHeight = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightY - renderStruct.currentRotationBoundBox.upperLeftY);
+            double horizontalScale = (this.Width - (2 * offsetLeftRight)) / rotBoxWidth;
+            double verticalScale = (this.Height - (2 * offsetTopBottom)) / rotBoxHeight;
+            bool widthIsBiggerDxf = (rotBoxWidth> rotBoxHeight);
+            bool widthIsBiggerControl = this.Width > this.Height;
+            // dxf file has bigger width than height. Control has bigger width than height. We are going to scale using height
+            if (widthIsBiggerDxf && widthIsBiggerControl) { renderStruct.uniformScaleFactor = verticalScale; }
+            // dxf file has bigger height than width . Control has bigger height than width. We are going to scale using width
+            if (!widthIsBiggerControl && !widthIsBiggerDxf) { renderStruct.uniformScaleFactor = horizontalScale; }
+            // dxf file has bigger width than height. Control has bigger height than width. We are going to use ... width scale
+            if (widthIsBiggerDxf && !widthIsBiggerControl) { renderStruct.uniformScaleFactor = horizontalScale; }
+            // dxf file has bigger height than width. Control has bigger width than height. We are going to use ... height scale
+            if (!widthIsBiggerDxf && widthIsBiggerControl) { renderStruct.uniformScaleFactor = verticalScale; }
             //and init rendering figures
+
         }
         private void WinFormsDxfRenderer_Paint(object sender, PaintEventArgs e)
         {
+            drawBoundBox(e.Graphics);
             
-            
+        }
+        private void drawBoundBox(Graphics in_graphics)
+        {
+            if (renderStruct != null)
+            {
+                double bboxOffsetX = -renderStruct.currentRotationBoundBox.bottomRightX;
+                double bboxOffsetY = -renderStruct.currentRotationBoundBox.bottomRightY;
+                double rotBoxWidth = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightX - renderStruct.currentRotationBoundBox.upperLeftX);
+                double rotBoxHeight = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightY - renderStruct.currentRotationBoundBox.upperLeftY);
+                Pen limePen = Pens.LimeGreen;
+                in_graphics.DrawLine(limePen, (float)offsetLeftRight, (float)offsetTopBottom, (float)offsetLeftRight, (float)(rotBoxHeight * renderStruct.uniformScaleFactor));
+                in_graphics.DrawLine(limePen, (float)offsetLeftRight, (float)offsetTopBottom, (float)(rotBoxWidth * renderStruct.uniformScaleFactor), (float)offsetTopBottom);
+            }
         }
     }
 }
