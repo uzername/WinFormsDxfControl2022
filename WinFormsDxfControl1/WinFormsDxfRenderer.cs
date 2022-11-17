@@ -35,7 +35,7 @@ namespace WinFormsDxfControl1
         class RenderStruct
         {
             /// <summary>
-            /// list of figures to render. it is flipped. And prepared to be rendered. I mean, rotated and scaled to fit window
+            /// list of figures to render. And prepared to be rendered. I mean, rotated and mirrored
             /// </summary>
             public List<RenderFigure> AllFigures = new List<RenderFigure>();
             /// <summary>
@@ -389,7 +389,16 @@ namespace WinFormsDxfControl1
             }
             return retStruct;
         }
+        /// <summary>
+        /// fill in renderStruct.AllFigures, for rendering. apply mirroring and then rotation
+        /// </summary>
+        /// <param name="inObtainedStructure">raw structure of dxf entities, provided by ixMilia</param>
+        /// <param name="inRotationAngleRad">rotation angle</param>
+        /// <param name="mirrorNow">mirroring, before rotating</param>
+        private void initRenderFigures(DxfFile inObtainedStructure, double inRotationAngleRad, bool mirrorNow)
+        {
 
+        }
         /// <summary>
         /// entry point to control. Here it begins. Process DXF file. Or re-calculate parameters of figures to render
         /// </summary>
@@ -411,27 +420,37 @@ namespace WinFormsDxfControl1
             double rotationAngleRad = ConvertDegreesToRadians(rotationAngleDeg);
             // next... calculate rotation bound box 
             renderStruct.currentRotationBoundBox = getBoundBoxOfDxf(dxfFile, true, rawCenterX, rawCenterY, rotationAngleRad);
-            //calculate appropriate scale. largest dimension of rotated boundbox must fit inside smallest dimension of control
-            double rotBoxWidth = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightX - renderStruct.currentRotationBoundBox.upperLeftX);
-            double rotBoxHeight = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightY - renderStruct.currentRotationBoundBox.upperLeftY);
-            double horizontalScale = (this.Width - (2 * offsetLeftRight)) / rotBoxWidth;
-            double verticalScale = (this.Height - (2 * offsetTopBottom)) / rotBoxHeight;
-            bool widthIsBiggerDxf = (rotBoxWidth> rotBoxHeight);
-            bool widthIsBiggerControl = this.Width > this.Height;
-            // dxf file has bigger width than height. Control has bigger width than height. We are going to scale using height
-            if (widthIsBiggerDxf && widthIsBiggerControl) { renderStruct.uniformScaleFactor = verticalScale; }
-            // dxf file has bigger height than width . Control has bigger height than width. We are going to scale using width
-            if (!widthIsBiggerControl && !widthIsBiggerDxf) { renderStruct.uniformScaleFactor = horizontalScale; }
-            // dxf file has bigger width than height. Control has bigger height than width. We are going to use ... width scale
-            if (widthIsBiggerDxf && !widthIsBiggerControl) { renderStruct.uniformScaleFactor = horizontalScale; }
-            // dxf file has bigger height than width. Control has bigger width than height. We are going to use ... height scale
-            if (!widthIsBiggerDxf && widthIsBiggerControl) { renderStruct.uniformScaleFactor = verticalScale; }
+            // scale factor
+            recalculateScaleFactor();
             //and init rendering figures
-
+            initRenderFigures(dxfFile, rotationAngleRad, mirror);
+            // finally draw
+            this.Refresh();
+        }
+        /// <summary>
+        /// assigns scale factor to renderStruct.uniformScaleFactor
+        /// </summary>
+        private void recalculateScaleFactor()
+        {
+            if (renderStruct != null)
+            {
+                //calculate appropriate scale. largest dimension of rotated boundbox must fit inside smallest dimension of control
+                double rotBoxWidth = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightX - renderStruct.currentRotationBoundBox.upperLeftX);
+                double rotBoxHeight = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightY - renderStruct.currentRotationBoundBox.upperLeftY);
+                double horizontalScale = (this.Width - (2 * offsetLeftRight)) / rotBoxWidth;
+                double verticalScale = (this.Height - (2 * offsetTopBottom)) / rotBoxHeight;
+                bool widthIsBiggerDxf = (rotBoxWidth > rotBoxHeight);
+                bool widthIsBiggerControl = this.Width > this.Height;
+                // https://stackoverflow.com/a/1373879/5128696 scale one rectangle into another
+                renderStruct.uniformScaleFactor = Math.Min(horizontalScale, verticalScale);
+            }
         }
         private void WinFormsDxfRenderer_Paint(object sender, PaintEventArgs e)
         {
+            // https://stackoverflow.com/questions/1485745/flip-coordinates-when-drawing-to-control
+            // but I shall just do Height-Y, so there won't be problems if I ever decide to draw text
             drawBoundBox(e.Graphics);
+            
             
         }
         private void drawBoundBox(Graphics in_graphics)
@@ -443,9 +462,17 @@ namespace WinFormsDxfControl1
                 double rotBoxWidth = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightX - renderStruct.currentRotationBoundBox.upperLeftX);
                 double rotBoxHeight = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightY - renderStruct.currentRotationBoundBox.upperLeftY);
                 Pen limePen = Pens.LimeGreen;
-                in_graphics.DrawLine(limePen, (float)offsetLeftRight, (float)offsetTopBottom, (float)offsetLeftRight, (float)(rotBoxHeight * renderStruct.uniformScaleFactor));
-                in_graphics.DrawLine(limePen, (float)offsetLeftRight, (float)offsetTopBottom, (float)(rotBoxWidth * renderStruct.uniformScaleFactor), (float)offsetTopBottom);
+                in_graphics.DrawLine(limePen, (float)offsetLeftRight, Height - (float)offsetTopBottom, (float)offsetLeftRight, Height - (float)(rotBoxHeight * renderStruct.uniformScaleFactor));
+                in_graphics.DrawLine(limePen, (float)offsetLeftRight, Height - (float)offsetTopBottom, (float)(rotBoxWidth * renderStruct.uniformScaleFactor), Height - (float)offsetTopBottom);
+                in_graphics.DrawLine(limePen, (float)offsetLeftRight, Height - (float)(rotBoxHeight * renderStruct.uniformScaleFactor), (float)(rotBoxWidth * renderStruct.uniformScaleFactor), Height - (float)(rotBoxHeight * renderStruct.uniformScaleFactor));
+                in_graphics.DrawLine(limePen, (float)(rotBoxWidth * renderStruct.uniformScaleFactor), Height - (float)offsetTopBottom, (float)(rotBoxWidth * renderStruct.uniformScaleFactor), Height - (float)(rotBoxHeight * renderStruct.uniformScaleFactor));
             }
+        }
+
+        private void WinFormsDxfRenderer_Resize(object sender, EventArgs e)
+        {
+            recalculateScaleFactor();
+            this.Refresh();
         }
     }
 }

@@ -39,6 +39,7 @@ namespace WinFormsDxfControl1
             this.Name = "WinFormsDxfRenderer";
             this.Size = new System.Drawing.Size(495, 359);
             this.Paint += new System.Windows.Forms.PaintEventHandler(this.WinFormsDxfRenderer_Paint);
+            this.Resize += new System.EventHandler(this.WinFormsDxfRenderer_Resize);
             this.ResumeLayout(false);
 
         }
