@@ -509,10 +509,20 @@ namespace WinFormsDxfControl1
                     radAngleStart += inRotationAngleRad;
                     arcCenterX = arcCenterXNew;
                     arcCenterY = arcCenterYNew;
+                }                
+                if (radAngleStart < radAngleEnd)
+                {
+                    rArc.sweepAngle = ConvertRadiansToDegrees(radAngleEnd - radAngleStart);
                 }
-                rArc.sweepAngle = ConvertRadiansToDegrees( radAngleEnd - radAngleStart );
-                rArc.startAngle = ConvertRadiansToDegrees( radAngleStart );
+                else
+                {
+                    // should it be here
+                    rArc.sweepAngle = ConvertRadiansToDegrees(radAngleEnd + Math.PI*2 - radAngleStart);
+                }
+
+                rArc.startAngle = ConvertRadiansToDegrees( 2*Math.PI- radAngleEnd );
                 rArc.height = arc.Radius * 2;
+                rArc.width = arc.Radius * 2;
                 rArc.y = arcCenterY + arc.Radius;
                 rArc.x = arcCenterX - arc.Radius;
                 return rArc;
@@ -711,7 +721,21 @@ namespace WinFormsDxfControl1
                         in_graphics.DrawLine(currentPen, (float)X1, (float)Y1, (float)X2, (float)Y2);
                     }else if (currentFigure is RenderArc)
                     {
-                        /// TODO render arc
+                        RenderArc rArc = (RenderArc)currentFigure;
+                        double X = rArc.x; double Y = rArc.y;
+                        scalePointAroundAnotherPoint(rArc.x, rArc.y, cntrX, cntrY, renderStruct.uniformScaleFactor, out X, out Y);
+                        X = X + offsetRotatedScaledX;
+                        Y = Height-( Y + offsetRotatedScaledY );
+                        double width = rArc.width * renderStruct.uniformScaleFactor;
+                        double height = rArc.height * renderStruct.uniformScaleFactor;
+                        // do not harass render engine with tiny arcs
+                        if ((width >= 2)&&(height>= 2))
+                        {
+                            in_graphics.DrawArc(currentPen, (float)X, (float)Y, (float)width, (float)height, (float)rArc.startAngle, (float)rArc.sweepAngle);
+                        } else
+                        {
+
+                        }
                     }
                 }
             }
