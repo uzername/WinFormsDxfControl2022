@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -46,6 +47,8 @@ namespace WinFormsDxfControl1
             /// Bound Box with rotation applied
             /// </summary>
             public BoundBox currentRotationBoundBox = new BoundBox();
+
+            public BoundBox rotBoxScaled = new BoundBox();
             /// <summary>
             /// current scale factor to fit into window
             /// </summary>
@@ -120,6 +123,11 @@ namespace WinFormsDxfControl1
         {
             double radians = (Math.PI / 180) * degrees;
             return (radians);
+        }
+        private double ConvertRadiansToDegrees(double radians)
+        {
+            double degrees = ( radians * 180.0 )/ Math.PI;
+            return(degrees);
         }
 
         // I want to align dxf profile somehow to axes. I find out bounding box of dxf file
@@ -389,14 +397,206 @@ namespace WinFormsDxfControl1
             }
             return retStruct;
         }
+
+        ///<summary>
+        /// perform mirroring of point with X=in_lineEntityP1X, while mirroring plane is at in_midPointHorizontal
+        /// </summary>
+        double mirrorPointByGuide(double in_lineEntityP1X, double in_midPointHorizontal)
+        {
+            double out_lineEntityP1X = in_lineEntityP1X;
+            if (in_lineEntityP1X < in_midPointHorizontal)
+            {
+                out_lineEntityP1X = in_lineEntityP1X + 2 * Math.Abs(in_lineEntityP1X - in_midPointHorizontal);
+            }
+            else if (in_lineEntityP1X > in_midPointHorizontal)
+            {
+                out_lineEntityP1X = in_lineEntityP1X - 2 * Math.Abs(in_lineEntityP1X - in_midPointHorizontal);
+            }
+            return out_lineEntityP1X;
+        }
+        // https://stackoverflow.com/a/60580020/5128696
+        double mirrorAngleByGuide(double angleRad)
+        {
+            double mirrored_Angle = Math.PI - angleRad;
+            if (mirrored_Angle < 0)
+                mirrored_Angle = 2 * Math.PI + mirrored_Angle;
+            return mirrored_Angle;
+        }
+        // https://www.geeksforgeeks.org/2d-transformation-in-computer-graphics-set-1-scaling-of-objects/
+        void scalePointAroundAnotherPoint(double P1X, double P1Y, double OX, double OY, double k, out double P2X, out double P2Y )
+        {
+            P2X = k * (P1X - OX) + OX;
+            P2Y = k * (P1Y - OY)+   OY;
+        }
+
         /// <summary>
         /// fill in renderStruct.AllFigures, for rendering. apply mirroring and then rotation
         /// </summary>
         /// <param name="inObtainedStructure">raw structure of dxf entities, provided by ixMilia</param>
-        /// <param name="inRotationAngleRad">rotation angle</param>
-        /// <param name="mirrorNow">mirroring, before rotating</param>
-        private void initRenderFigures(DxfFile inObtainedStructure, double inRotationAngleRad, bool mirrorNow)
+        /// <param name="inRotationAngleRad">rotation angle</param>        
+        /// <param name="mirror">mirroring, before rotating</param>
+        private void initRenderFigures(DxfFile inObtainedStructure, double inRotationAngleRad, bool mirror)
         {
+            double midPointHorizontal = (renderStruct.currentRawBoundBox.upperLeftX + renderStruct.currentRawBoundBox.bottomRightX) / 2.0;
+            double midPointVertical = (renderStruct.currentRawBoundBox.upperLeftY + renderStruct.currentRawBoundBox.bottomRightY) / 2.0;
+            RenderLine handleLineGeometry(DxfLine lineEntity)
+            {
+                RenderLine rLine = new RenderLine();
+                double lineEntityP1X = lineEntity.P1.X;
+                double lineEntityP2X = lineEntity.P2.X;
+                double lineEntityP1Y = lineEntity.P1.Y;
+                double lineEntityP2Y = lineEntity.P2.Y;
+                
+                double inRotationCenterX = midPointHorizontal;
+                double inRotationCenterY = midPointVertical;
+                // crude mirroring
+                if (mirror)
+                {
+                    lineEntityP1X = mirrorPointByGuide(lineEntityP1X, midPointHorizontal);
+                    lineEntityP2X = mirrorPointByGuide(lineEntityP2X, midPointHorizontal);
+                }
+                if (inRotationAngleRad != 0)
+                {
+                    double lineEntityP1XNew = Math.Cos(inRotationAngleRad) * (lineEntityP1X - inRotationCenterX) - Math.Sin(inRotationAngleRad) * (lineEntityP1Y - inRotationCenterY) + inRotationCenterX;
+                    double lineEntityP1YNew = Math.Sin(inRotationAngleRad) * (lineEntityP1X - inRotationCenterX) + Math.Cos(inRotationAngleRad) * (lineEntityP1Y - inRotationCenterY) + inRotationCenterY;
+                    double lineEntityP2XNew = Math.Cos(inRotationAngleRad) * (lineEntityP2X - inRotationCenterX) - Math.Sin(inRotationAngleRad) * (lineEntityP2Y - inRotationCenterY) + inRotationCenterX;
+                    double lineEntityP2YNew = Math.Sin(inRotationAngleRad) * (lineEntityP2X - inRotationCenterX) + Math.Cos(inRotationAngleRad) * (lineEntityP2Y - inRotationCenterY) + inRotationCenterY;
+                    lineEntityP1X = lineEntityP1XNew;
+                    lineEntityP2X = lineEntityP2XNew;
+                    lineEntityP1Y = lineEntityP1YNew;
+                    lineEntityP2Y = lineEntityP2YNew;
+                }
+                rLine.StartX = lineEntityP1X; rLine.StartY = lineEntityP1Y;
+                rLine.EndX = lineEntityP2X; rLine.EndY = lineEntityP2Y;
+                return rLine;
+            }
+            
+            RenderArc handleArcGeometry(DxfArc arc)
+            {
+                RenderArc rArc = new RenderArc();
+                double arcCenterX = arc.Center.X;
+                double arcCenterY = arc.Center.Y;
+                double radAngleStart = ConvertDegreesToRadians(arc.StartAngle);
+                double radAngleEnd = ConvertDegreesToRadians(arc.EndAngle);                
+                if (radAngleStart > radAngleEnd)
+                {
+                    radAngleEnd += Math.PI * 2;
+                }
+                // uncertain crude experimental mirror of arc
+                // experiments are showing that start angle becomes end angle,
+                // and end angle becomes start - after mirroring
+                if (mirror)
+                {
+                    radAngleStart = mirrorAngleByGuide(radAngleStart);
+                    radAngleEnd = mirrorAngleByGuide(radAngleEnd);
+                    // swap?
+
+                    double tempDecimal = radAngleStart;
+                    radAngleStart = radAngleEnd;
+                    radAngleEnd = tempDecimal;
+
+                    if (radAngleStart > radAngleEnd)
+                    {
+                        radAngleEnd += Math.PI * 2;
+                    }
+                    arcCenterX = mirrorPointByGuide(arcCenterX, midPointHorizontal);
+                }
+                if (inRotationAngleRad != 0)
+                {
+                    double arcCenterXNew = Math.Cos(inRotationAngleRad) * (arcCenterX - midPointHorizontal) - Math.Sin(inRotationAngleRad) * (arcCenterY - midPointVertical) + midPointHorizontal;
+                    double arcCenterYNew = Math.Sin(inRotationAngleRad) * (arcCenterX - midPointHorizontal) + Math.Cos(inRotationAngleRad) * (arcCenterY - midPointVertical) + midPointVertical;
+                    radAngleEnd += inRotationAngleRad;
+                    radAngleStart += inRotationAngleRad;
+                    arcCenterX = arcCenterXNew;
+                    arcCenterY = arcCenterYNew;
+                }
+                rArc.sweepAngle = ConvertRadiansToDegrees( radAngleEnd - radAngleStart );
+                rArc.startAngle = ConvertRadiansToDegrees( radAngleStart );
+                rArc.height = arc.Radius * 2;
+                rArc.y = arcCenterY + arc.Radius;
+                rArc.x = arcCenterX - arc.Radius;
+                return rArc;
+            }
+            /// this one is recursive
+            void handlePolyline(List<DxfEntity> theInternalsOfPolyLine)
+            {
+                foreach (DxfEntity entity in theInternalsOfPolyLine)
+                {
+                    if (entity is DxfLwPolyline)
+                    {
+                        List<DxfEntity> theInternalsOfPolyLine2 = new List<DxfEntity>((entity as DxfLwPolyline).AsSimpleEntities());
+                        handlePolyline(theInternalsOfPolyLine2);
+                    }
+                    else if (entity is DxfPolyline)
+                    {
+                        List<DxfEntity> theInternalsOfPolyLine2 = new List<DxfEntity>(((entity as DxfPolyline).AsSimpleEntities()));
+                        handlePolyline(theInternalsOfPolyLine2);
+                    } else
+                   
+                        switch (entity.EntityType)
+                        {
+                            case (DxfEntityType.Line):
+                                {
+                                    RenderLine line1 = handleLineGeometry(entity as DxfLine);
+                                    renderStruct.AllFigures.Add(line1);
+                                    break;
+                                }
+                            case (DxfEntityType.Arc):
+                                {
+                                    RenderArc arc1 = handleArcGeometry(entity as DxfArc);
+                                    renderStruct.AllFigures.Add(arc1);
+                                    break;
+                                }
+                            default:
+                                break;
+                        }
+                    
+                }
+            }
+
+            renderStruct.AllFigures = new List<RenderFigure>();
+            foreach (DxfEntity entity in dxfFile.Entities)
+            {
+                if (ignoredLayers.Contains(entity.Layer.ToLower()) == false)
+                {
+                    switch (entity.EntityType)
+                    {
+
+                        case DxfEntityType.Line:
+                            {
+                                DxfLine line = (DxfLine)entity;
+                                RenderLine line1 = handleLineGeometry(line);
+                                renderStruct.AllFigures.Add(line1);
+                                break;
+                            }
+                        case DxfEntityType.Arc:
+                            {
+                                DxfArc arc = (DxfArc)entity;
+                                RenderArc arc1 = handleArcGeometry(arc);
+                                renderStruct.AllFigures.Add(arc1);
+                                break;
+                            }
+                        case DxfEntityType.Circle:
+                            {
+                                
+                                DxfCircle circle = (DxfCircle)entity;
+                                double circleCenterX = circle.Center.X;
+                                double circleCenterY = circle.Center.Y;
+                                double circleRadius = circle.Radius;
+                                           
+                                /// TODO handle circle
+                                break;
+                            }
+                        case DxfEntityType.LwPolyline:
+                        case DxfEntityType.Polyline:
+                            {
+                                List<DxfEntity> theInternalsOfPolyLine = new List<DxfEntity>();
+                                handlePolyline(theInternalsOfPolyLine);
+                                break;
+                            }
+                    }
+                }
+            }
 
         }
         /// <summary>
@@ -443,6 +643,23 @@ namespace WinFormsDxfControl1
                 bool widthIsBiggerControl = this.Width > this.Height;
                 // https://stackoverflow.com/a/1373879/5128696 scale one rectangle into another
                 renderStruct.uniformScaleFactor = Math.Min(horizontalScale, verticalScale);
+
+                // we want to scale output figures to fit the window.
+                double rotBoxScalingCenterX = (renderStruct.currentRotationBoundBox.bottomRightX + renderStruct.currentRotationBoundBox.upperLeftX) / 2;
+                double rotBoxScalingCenterY = (renderStruct.currentRotationBoundBox.bottomRightY + renderStruct.currentRotationBoundBox.upperLeftY) / 2;
+                renderStruct.rotBoxScaled = new BoundBox();
+                scalePointAroundAnotherPoint(
+                    renderStruct.currentRotationBoundBox.bottomRightX,
+                    renderStruct.currentRotationBoundBox.bottomRightY,
+                    rotBoxScalingCenterX, rotBoxScalingCenterY,
+                    renderStruct.uniformScaleFactor,
+                    out renderStruct.rotBoxScaled.bottomRightX, out renderStruct.rotBoxScaled.bottomRightY);
+                scalePointAroundAnotherPoint(
+                    renderStruct.currentRotationBoundBox.upperLeftX,
+                    renderStruct.currentRotationBoundBox.upperLeftY,
+                    rotBoxScalingCenterX, rotBoxScalingCenterY,
+                    renderStruct.uniformScaleFactor,
+                    out renderStruct.rotBoxScaled.upperLeftX, out renderStruct.rotBoxScaled.upperLeftY);
             }
         }
         private void WinFormsDxfRenderer_Paint(object sender, PaintEventArgs e)
@@ -450,15 +667,14 @@ namespace WinFormsDxfControl1
             // https://stackoverflow.com/questions/1485745/flip-coordinates-when-drawing-to-control
             // but I shall just do Height-Y, so there won't be problems if I ever decide to draw text
             drawBoundBox(e.Graphics);
-            
+            drawAllFigures(e.Graphics);
             
         }
         private void drawBoundBox(Graphics in_graphics)
         {
             if (renderStruct != null)
             {
-                double bboxOffsetX = -renderStruct.currentRotationBoundBox.bottomRightX;
-                double bboxOffsetY = -renderStruct.currentRotationBoundBox.bottomRightY;
+                // apparently offset is not needed here
                 double rotBoxWidth = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightX - renderStruct.currentRotationBoundBox.upperLeftX);
                 double rotBoxHeight = Math.Abs(renderStruct.currentRotationBoundBox.bottomRightY - renderStruct.currentRotationBoundBox.upperLeftY);
                 Pen limePen = Pens.LimeGreen;
@@ -466,6 +682,38 @@ namespace WinFormsDxfControl1
                 in_graphics.DrawLine(limePen, (float)offsetLeftRight, Height - (float)offsetTopBottom, (float)(rotBoxWidth * renderStruct.uniformScaleFactor), Height - (float)offsetTopBottom);
                 in_graphics.DrawLine(limePen, (float)offsetLeftRight, Height - (float)(rotBoxHeight * renderStruct.uniformScaleFactor), (float)(rotBoxWidth * renderStruct.uniformScaleFactor), Height - (float)(rotBoxHeight * renderStruct.uniformScaleFactor));
                 in_graphics.DrawLine(limePen, (float)(rotBoxWidth * renderStruct.uniformScaleFactor), Height - (float)offsetTopBottom, (float)(rotBoxWidth * renderStruct.uniformScaleFactor), Height - (float)(rotBoxHeight * renderStruct.uniformScaleFactor));
+            }
+        }
+        private void drawAllFigures(Graphics in_graphics)
+        {
+            /// TODO handle color
+            Pen currentPen = Pens.Blue;
+            if (renderStruct!=null)
+            {
+                // assuming that rotboxscaled was calculated, in recalculateScaleFactor
+                double offsetRotatedScaledX = -renderStruct.rotBoxScaled.upperLeftX;
+                double offsetRotatedScaledY = -renderStruct.rotBoxScaled.bottomRightY;
+                double cntrX = (renderStruct.currentRotationBoundBox.bottomRightX + renderStruct.currentRotationBoundBox.upperLeftX) / 2.0;
+                double cntrY = (renderStruct.currentRotationBoundBox.bottomRightY + renderStruct.currentRotationBoundBox.upperLeftY) / 2.0;
+                foreach (RenderFigure currentFigure in renderStruct.AllFigures)
+                {
+                    if (currentFigure is RenderLine)
+                    {
+                        RenderLine rLine = (RenderLine)currentFigure;
+                        double X1 = rLine.StartX; double X2 = rLine.EndX;
+                        double Y1 = rLine.StartY; double Y2 = rLine.EndY;
+                        scalePointAroundAnotherPoint(rLine.StartX, rLine.StartY, cntrX, cntrY, renderStruct.uniformScaleFactor, out X1, out Y1);
+                        scalePointAroundAnotherPoint(rLine.EndX, rLine.EndY, cntrX, cntrY, renderStruct.uniformScaleFactor, out X2, out Y2);
+                        X1=X1+offsetRotatedScaledX; X2=X2+offsetRotatedScaledX;
+                        // origin point to bottom
+                        Y1=Height-(Y1+offsetRotatedScaledY); Y2=Height-(Y2+offsetRotatedScaledY);
+
+                        in_graphics.DrawLine(currentPen, (float)X1, (float)Y1, (float)X2, (float)Y2);
+                    }else if (currentFigure is RenderArc)
+                    {
+                        /// TODO render arc
+                    }
+                }
             }
         }
 

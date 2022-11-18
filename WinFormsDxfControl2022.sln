@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31702.278
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33103.184
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinFormsDxfControlMain", "WinFormsDxfControl\WinFormsDxfControlMain.csproj", "{6AEEE6DD-82D2-428A-BFC2-AA6C1BAC8B28}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinFormsDxfControlMain", "WinFormsDxfControl\WinFormsDxfControlMain.csproj", "{6AEEE6DD-82D2-428A-BFC2-AA6C1BAC8B28}"
 	ProjectSection(ProjectDependencies) = postProject
 		{B8F960F3-67A9-4EE1-9AA1-8162591B4DD6} = {B8F960F3-67A9-4EE1-9AA1-8162591B4DD6}
 	EndProjectSection
@@ -11,9 +11,10 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{6E280582-A9A3-46E1-AC4F-E3FF31B62BA9}"
 	ProjectSection(SolutionItems) = preProject
 		README.MD = README.MD
+		transforms.dxf = transforms.dxf
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinFormsDxfControl1", "WinFormsDxfControl1\WinFormsDxfControl1.csproj", "{B8F960F3-67A9-4EE1-9AA1-8162591B4DD6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WinFormsDxfControl1", "WinFormsDxfControl1\WinFormsDxfControl1.csproj", "{B8F960F3-67A9-4EE1-9AA1-8162591B4DD6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
