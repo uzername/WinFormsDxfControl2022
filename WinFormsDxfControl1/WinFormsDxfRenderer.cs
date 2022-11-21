@@ -133,12 +133,13 @@ namespace WinFormsDxfControl1
         // I want to align dxf profile somehow to axes. I find out bounding box of dxf file
         // I also use here values for rotation
         // inRotationAngleRad is from 0 to 2PI . It does not matter though
+        // bool? mirroring :: null - do not care about mirroring, true - mirror it, false - no mirror it. Mirroring affects bound box, but only of rotated figurine
         /* https://stackoverflow.com/questions/2259476/rotating-a-point-about-another-point-2d
          * If you rotate point (px, py) around point (ox, oy) by angle theta you'll get:
             p'x = cos(theta) * (px-ox) - sin(theta) * (py-oy) + ox
             p'y = sin(theta) * (px-ox) + cos(theta) * (py-oy) + oy
          */
-        private BoundBox getBoundBoxOfDxf(DxfFile inObtainedStructure, bool calculateRotation, double inRotationCenterX, double inRotationCenterY, double inRotationAngleRad)
+        private BoundBox getBoundBoxOfDxf(DxfFile inObtainedStructure, bool calculateRotation, double inRotationCenterX, double inRotationCenterY, double inRotationAngleRad, bool? mirroring)
         {
             bool isFirstEstimation = true;
             bool gotInside = false;
@@ -151,6 +152,13 @@ namespace WinFormsDxfControl1
                 double lineEntityP2X = lineEntity.P2.X;
                 double lineEntityP1Y = lineEntity.P1.Y;
                 double lineEntityP2Y = lineEntity.P2.Y;
+                if (mirroring.GetValueOrDefault())
+                {
+                    // mirror of line
+                    double midPointHorizontal = inRotationCenterX;
+                    lineEntityP1X = mirrorPointByGuide(lineEntityP1X, midPointHorizontal);
+                    lineEntityP2X = mirrorPointByGuide(lineEntityP2X, midPointHorizontal);
+                }
                 if (calculateRotation)
                 {
                     double lineEntityP1XNew = Math.Cos(inRotationAngleRad) * (lineEntityP1X - inRotationCenterX) - Math.Sin(inRotationAngleRad) * (lineEntityP1Y - inRotationCenterY) + inRotationCenterX;
@@ -177,6 +185,24 @@ namespace WinFormsDxfControl1
                 if (radAngleStart > radAngleEnd)
                 {
                     radAngleEnd += Math.PI * 2;
+                }
+                if (mirroring.GetValueOrDefault())
+                {
+                    // mirror of arc
+                    double midPointHorizontal = inRotationCenterX;
+                    radAngleStart = mirrorAngleByGuide(radAngleStart);
+                    radAngleEnd = mirrorAngleByGuide(radAngleEnd);
+                    // swap?
+
+                    double tempDecimal = radAngleStart;
+                    radAngleStart = radAngleEnd;
+                    radAngleEnd = tempDecimal;
+
+                    if (radAngleStart > radAngleEnd)
+                    {
+                        radAngleEnd += Math.PI * 2;
+                    }
+                    arcCenterX = mirrorPointByGuide(arcCenterX, midPointHorizontal);
                 }
                 if (calculateRotation)
                 {
@@ -623,13 +649,14 @@ namespace WinFormsDxfControl1
                 dxfFile = DxfFile.Load(inPathToFile);
                 // create renderstruct
                 renderStruct = new RenderStruct();
-                renderStruct.currentRawBoundBox = getBoundBoxOfDxf(dxfFile, false, 0, 0, 0);
+                // we do not care about mirroring here, since boundbox of figure is not changed by mirroring
+                renderStruct.currentRawBoundBox = getBoundBoxOfDxf(dxfFile, false, 0, 0, 0, null);  
             }
             double rawCenterX = (renderStruct.currentRawBoundBox.bottomRightX + renderStruct.currentRawBoundBox.upperLeftX) / 2;
             double rawCenterY = (renderStruct.currentRawBoundBox.bottomRightY + renderStruct.currentRawBoundBox.upperLeftY) / 2;
             double rotationAngleRad = ConvertDegreesToRadians(rotationAngleDeg);
             // next... calculate rotation bound box 
-            renderStruct.currentRotationBoundBox = getBoundBoxOfDxf(dxfFile, true, rawCenterX, rawCenterY, rotationAngleRad);
+            renderStruct.currentRotationBoundBox = getBoundBoxOfDxf(dxfFile, true, rawCenterX, rawCenterY, rotationAngleRad, mirror);
             // scale factor
             recalculateScaleFactor();
             //and init rendering figures

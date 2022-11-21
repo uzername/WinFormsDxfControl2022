@@ -68,6 +68,7 @@ namespace WinFormsDxfControl
             this.buttonBrowse.TabIndex = 3;
             this.buttonBrowse.Text = "...";
             this.buttonBrowse.UseVisualStyleBackColor = true;
+            this.buttonBrowse.Click += new System.EventHandler(this.buttonBrowse_Click);
             // 
             // checkBoxMirror
             // 
@@ -79,6 +80,7 @@ namespace WinFormsDxfControl
             this.checkBoxMirror.TabIndex = 4;
             this.checkBoxMirror.Text = "Mirror";
             this.checkBoxMirror.UseVisualStyleBackColor = true;
+            this.checkBoxMirror.CheckedChanged += new System.EventHandler(this.checkBoxMirror_CheckedChanged);
             // 
             // label1
             // 
@@ -102,6 +104,7 @@ namespace WinFormsDxfControl
             this.numericUpDown1.Name = "numericUpDown1";
             this.numericUpDown1.Size = new System.Drawing.Size(75, 23);
             this.numericUpDown1.TabIndex = 6;
+            this.numericUpDown1.ValueChanged += new System.EventHandler(this.numericUpDown1_ValueChanged);
             // 
             // buttonUpdate
             // 
